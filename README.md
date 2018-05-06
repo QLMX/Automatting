@@ -1,3 +1,7 @@
+# fcn_vgg
+   use fcn net 
+# image_matting
+   my own code for matting
 # Semantic Segmentation Suite in TensorFlow
 
 ## News
