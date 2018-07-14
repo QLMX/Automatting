@@ -467,7 +467,7 @@ if __name__ == '__mian__':
         print('Loaded latest model checkpoint')
         saver.restore(sess, model_checkpoint_name)
 
-    avg_scores_per_epoch = []
+    avg_scores_per_epoch = [] 
 
     # Load the data
     print("Loading the data ...")
