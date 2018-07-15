@@ -15,7 +15,7 @@ import subprocess
 
 import helpers
 import utils
-from config import args
+from config import cfg
 
 import matplotlib.pyplot as plt
 
@@ -31,7 +31,8 @@ from GCN import build_gcn
 from DeepLabV3 import build_deeplabv3
 from DeepLabV3_plus import build_deeplabv3_plus
 from AdapNet import build_adaptnet
-import preprocess
+import dataset
+
 
 def  select_model(model, num_class):
     # Get the selected model.
@@ -415,8 +416,8 @@ def predict():
     print("Wrote image " + "%s/%s_pred.png" % ("Test", file_name))
 
 if __name__ == '__mian__':
-    # Get the names of the classes so we can record the evaluation results
-    class_names_list, label_values = helpers.get_label_info(os.path.join(args.dataset, "class_dict.csv"))
+    #load data
+    class_names_list, label_values = helpers.get_label_info(os.path.join(cfg.class_dict, 'class_dict.csv'))
     class_names_string = ""
     for class_name in class_names_list:
         if not class_name == class_names_list[-1]:
@@ -424,6 +425,8 @@ if __name__ == '__mian__':
         else:
             class_names_string = class_names_string + class_name
     num_classes = len(label_values)
+    train_input_names, train_output_names, val_input_names, val_output_names, test_input_names, test_output_names = dataset.prepare_data()
+
 
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
@@ -434,10 +437,11 @@ if __name__ == '__mian__':
     net_input = tf.placeholder(tf.float32, shape=[None, None, None, 3])
     net_output = tf.placeholder(tf.float32, shape=[None, None, None, num_classes])
 
-    network, init_fn = select_model(args.model)
+    network, init_fn = select_model(cfg.model)
+
 
     losses = None
-    if args.class_balancing:
+    if cfg.class_balancing:
         print("Computing class weights for", args.dataset, "...")
         class_weights = utils.compute_class_weights(labels_dir=args.dataset + "/train_labels",
                                                     label_values=label_values)
@@ -449,7 +453,7 @@ if __name__ == '__mian__':
         losses = tf.nn.softmax_cross_entropy_with_logits(logits=network, labels=net_output)
     loss = tf.reduce_mean(losses)
 
-    opt = tf.train.AdamOptimizer(0.0001).minimize(loss, var_list=[var for var in tf.trainable_variables()])
+    opt = tf.train.AdamOptimizer(cfg.lr).minimize(loss, var_list=[var for var in tf.trainable_variables()])
 
     saver = tf.train.Saver(max_to_keep=1000)
     sess.run(tf.global_variables_initializer())
@@ -467,11 +471,10 @@ if __name__ == '__mian__':
         print('Loaded latest model checkpoint')
         saver.restore(sess, model_checkpoint_name)
 
-    avg_scores_per_epoch = [] 
+    avg_scores_per_epoch = []
 
     # Load the data
     print("Loading the data ...")
-    train_input_names, train_output_names, val_input_names, val_output_names, test_input_names, test_output_names = preprocess.prepare_data()
     train()
 
 

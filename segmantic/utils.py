@@ -2,32 +2,20 @@
 # -*- coding: utf-8 -*-
 # @Time    : 2018/7/13 2:02
 # author   : QLMX
-from __future__ import print_function
-import os, time, cv2, sys, math
-import tensorflow as tf
-import tensorflow.contrib.slim as slim
+from __future__ import print_function, division
+
+import datetime
+import os
+import random
+import sys
+
 import numpy as np
-import time, datetime
-import os, random
+import tensorflow as tf
 from scipy.misc import imread
-import ast
-import argparse
-import subprocess
-
 from sklearn.metrics import precision_score, \
-    recall_score, confusion_matrix, classification_report, \
-    accuracy_score, f1_score
+    recall_score, f1_score
 
-def str2bool(v):
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
-
-def download_checkpoints(model_name):
-    subprocess.check_output(["python", "get_pretrained_checkpoints.py", "--model=" + model_name])
+import helpers
 
 
 # Takes an absolute file path and returns the name of the file without th extension
@@ -68,6 +56,92 @@ def mean_image_subtraction(inputs, means=[123.68, 116.78, 103.94]):
     for i in range(num_channels):
         channels[i] -= means[i]
     return tf.concat(axis=3, values=channels)
+
+
+def _lovasz_grad(gt_sorted):
+    """
+    Computes gradient of the Lovasz extension w.r.t sorted errors
+    See Alg. 1 in paper
+    """
+    gts = tf.reduce_sum(gt_sorted)
+    intersection = gts - tf.cumsum(gt_sorted)
+    union = gts + tf.cumsum(1. - gt_sorted)
+    jaccard = 1. - intersection / union
+    jaccard = tf.concat((jaccard[0:1], jaccard[1:] - jaccard[:-1]), 0)
+    return jaccard
+
+
+def _flatten_probas(probas, labels, ignore=None, order='BHWC'):
+    """
+    Flattens predictions in the batch
+    """
+    if order == 'BCHW':
+        probas = tf.transpose(probas, (0, 2, 3, 1), name="BCHW_to_BHWC")
+        order = 'BHWC'
+    if order != 'BHWC':
+        raise NotImplementedError('Order {} unknown'.format(order))
+    C = probas.shape[3]
+    probas = tf.reshape(probas, (-1, C))
+    labels = tf.reshape(labels, (-1,))
+    if ignore is None:
+        return probas, labels
+    valid = tf.not_equal(labels, ignore)
+    vprobas = tf.boolean_mask(probas, valid, name='valid_probas')
+    vlabels = tf.boolean_mask(labels, valid, name='valid_labels')
+    return vprobas, vlabels
+
+
+def _lovasz_softmax_flat(probas, labels, only_present=True):
+    """
+    Multi-class Lovasz-Softmax loss
+      probas: [P, C] Variable, class probabilities at each prediction (between 0 and 1)
+      labels: [P] Tensor, ground truth labels (between 0 and C - 1)
+      only_present: average only on classes present in ground truth
+    """
+    C = probas.shape[1]
+    losses = []
+    present = []
+    for c in range(C):
+        fg = tf.cast(tf.equal(labels, c), probas.dtype)  # foreground for class c
+        if only_present:
+            present.append(tf.reduce_sum(fg) > 0)
+        errors = tf.abs(fg - probas[:, c])
+        errors_sorted, perm = tf.nn.top_k(errors, k=tf.shape(errors)[0], name="descending_sort_{}".format(c))
+        fg_sorted = tf.gather(fg, perm)
+        grad = _lovasz_grad(fg_sorted)
+        losses.append(
+            tf.tensordot(errors_sorted, tf.stop_gradient(grad), 1, name="loss_class_{}".format(c))
+        )
+    losses_tensor = tf.stack(losses)
+    if only_present:
+        present = tf.stack(present)
+        losses_tensor = tf.boolean_mask(losses_tensor, present)
+    return losses_tensor
+
+
+def lovasz_softmax(probas, labels, only_present=True, per_image=False, ignore=None, order='BHWC'):
+    """
+    Multi-class Lovasz-Softmax loss
+      probas: [B, H, W, C] or [B, C, H, W] Variable, class probabilities at each prediction (between 0 and 1)
+      labels: [B, H, W] Tensor, ground truth labels (between 0 and C - 1)
+      only_present: average only on classes present in ground truth
+      per_image: compute the loss per image instead of per batch
+      ignore: void class labels
+      order: use BHWC or BCHW
+    """
+    probas = tf.nn.softmax(probas, 3)
+    labels = helpers.reverse_one_hot(labels)
+
+    if per_image:
+        def treat_image(prob, lab):
+            prob, lab = tf.expand_dims(prob, 0), tf.expand_dims(lab, 0)
+            prob, lab = _flatten_probas(prob, lab, ignore, order)
+            return _lovasz_softmax_flat(prob, lab, only_present=only_present)
+
+        losses = tf.map_fn(treat_image, (probas, labels), dtype=tf.float32)
+    else:
+        losses = _lovasz_softmax_flat(*_flatten_probas(probas, labels, ignore, order), only_present=only_present)
+    return losses
 
 
 # Randomly crop the image to a specific size. For data augmentation
@@ -155,14 +229,8 @@ def evaluate_segmentation(pred, label, num_classes, score_averaging="weighted"):
     return global_accuracy, class_accuracies, prec, rec, f1, iou
 
 
-def median_frequency_balancing(labels_dir, num_classes):
+def compute_class_weights(labels_dir, label_values):
     '''
-    Perform median frequency balancing on the image files, given by the formula:
-    f = Median_freq_c / total_freq_c
-
-    Where median_freq_c is the median frequency of the class for all pixels of C that appeared in images
-    and total_freq_c is the total number of pixels of c in the total pixels of the images where c appeared.
-
     Arguments:
         labels_dir(list): Directory where the image segmentation labels are
         num_classes(int): the number of classes of pixels in all images
@@ -171,42 +239,31 @@ def median_frequency_balancing(labels_dir, num_classes):
         class_weights(list): a list of class weights where each index represents each class label and the element is the class weight for that label.
 
     '''
-    # Initialize all the labels key with a list value
     image_files = [os.path.join(labels_dir, file) for file in os.listdir(labels_dir) if file.endswith('.png')]
 
-    label_to_frequency_dict = {}
-    for i in range(num_classes):
-        label_to_frequency_dict[i] = []
+    num_classes = len(label_values)
+
+    class_pixels = np.zeros(num_classes)
+
+    total_pixels = 0.0
 
     for n in range(len(image_files)):
         image = imread(image_files[n])
-        unique_labels = list(np.unique(image))
 
-        # For each image sum up the frequency of each label in that image and append to the dictionary if frequency is positive.
-        for i in unique_labels:
-            class_mask = np.equal(image, i)
-            class_mask = class_mask.astype(np.float32)
-            class_frequency = np.sum(class_mask)
+        for index, colour in enumerate(label_values):
+            class_map = np.all(np.equal(image, colour), axis=-1)
+            class_map = class_map.astype(np.float32)
+            class_pixels[index] += np.sum(class_map)
 
-            if class_frequency != 0.0:
-                index = unique_labels.index(i)
-                label_to_frequency_dict[index].append(class_frequency)
+        print("\rProcessing image: " + str(n) + " / " + str(len(image_files)), end="")
+        sys.stdout.flush()
 
-    class_weights = []
-    print(class_frequency)
+    total_pixels = float(np.sum(class_pixels))
+    index_to_delete = np.argwhere(class_pixels == 0.0)
+    class_pixels = np.delete(class_pixels, index_to_delete)
 
-    # Get the total pixels to calculate total_frequency later
-    total_pixels = 0
-    for frequencies in label_to_frequency_dict.values():
-        total_pixels += sum(frequencies)
-
-    for i, j in label_to_frequency_dict.items():
-        j = sorted(j)  # To obtain the median, we've got to sort the frequencies
-
-        median_frequency = np.median(j) / sum(j)
-        total_frequency = sum(j) / total_pixels
-        median_frequency_balanced = median_frequency / total_frequency
-        class_weights.append(median_frequency_balanced)
+    class_weights = total_pixels / class_pixels
+    class_weights = class_weights / np.sum(class_weights)
 
     return class_weights
 
@@ -219,4 +276,6 @@ def memory():
     py = psutil.Process(pid)
     memoryUse = py.memory_info()[0] / 2. ** 30  # Memory use in GB
     print('Memory usage in GBs:', memoryUse)
+
+
 
