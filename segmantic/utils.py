@@ -8,12 +8,15 @@ import datetime
 import os
 import random
 import sys
+import matplotlib
+matplotlib.use("Agg")
 
 import numpy as np
 import tensorflow as tf
+import matplotlib.pyplot as plt
+
 from scipy.misc import imread
-from sklearn.metrics import precision_score, \
-    recall_score, f1_score
+from sklearn.metrics import precision_score, recall_score, f1_score
 
 import helpers
 
@@ -229,7 +232,7 @@ def evaluate_segmentation(pred, label, num_classes, score_averaging="weighted"):
     return global_accuracy, class_accuracies, prec, rec, f1, iou
 
 
-def compute_class_weights(labels_dir, label_values):
+def compute_class_weights(image_files, label_values):
     '''
     Arguments:
         labels_dir(list): Directory where the image segmentation labels are
@@ -239,7 +242,7 @@ def compute_class_weights(labels_dir, label_values):
         class_weights(list): a list of class weights where each index represents each class label and the element is the class weight for that label.
 
     '''
-    image_files = [os.path.join(labels_dir, file) for file in os.listdir(labels_dir) if file.endswith('.png')]
+    # image_files = [os.path.join(labels_dir, file) for file in os.listdir(labels_dir) if file.endswith('.png')]
 
     num_classes = len(label_values)
 
@@ -276,6 +279,19 @@ def memory():
     py = psutil.Process(pid)
     memoryUse = py.memory_info()[0] / 2. ** 30  # Memory use in GB
     print('Memory usage in GBs:', memoryUse)
+
+def drawLine(x, y, save_name, title='QLMX', xlabel='X', ylabel='Y'):
+    fig = plt.figure(figsize=(11, 8))
+    ax1 = fig.add_subplot(111)
+
+    ax1.plot(x, y)
+    ax1.set_title(title)
+    ax1.set_xlabel(xlabel)
+    ax1.set_ylabel(ylabel)
+    plt.savefig(save_name)
+    # plt.show()
+
+
 
 
 

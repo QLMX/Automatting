@@ -37,12 +37,20 @@ class Config:
 
     #the train parameter
     num_epochs = 100
-    batch_size = 1
+    batch_size = 32
     num_val_images = 10
     lr = 0.0001
+    num_keep = 1000
+    num_val_images = 10
+    checkpoint_step = 10
+    validation_step = 1
+    mode = 'train'
 
-    model="FC-DenseNet56"
+    test_bath_size = 16
+
+    model="FC-DenseNet103"
     class_balancing = False
+    threshold = 0.5
 
     #the data preprocess parameter
     height = 256

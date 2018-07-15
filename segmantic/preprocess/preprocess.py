@@ -52,8 +52,5 @@ def mergeData(val_rate, train_dir_list=cfg.name_dict, test_dir=cfg.test_img_dir,
     saveName(test, save_dir + 'test.txt')
 
 
-
-
-
 if __name__ == '__main__':
     mergeData(0.05)

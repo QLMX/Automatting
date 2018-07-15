@@ -3,30 +3,37 @@
 # @Time    : 2018/7/15 1:49
 # author   : QLMX
 import cv2, os
+import numpy as np
 import sys
 import random
 
 sys.path.append('../')
 from config import cfg
 
-# Get a list of the training, validation, and testing file paths
-def prepare_data(dataset_dir_list=cfg.name_dict):
+def readData(path):
     img = []
     ann = []
-    train_input_names=[]
-    train_output_names=[]
-    val_input_names=[]
-    val_output_names=[]
-    test_input_names=[]
-    test_output_names=[]
-    for name in dataset_dir_list:
-        for file in os.listdir(name[0]):
-            img.append(name[0] + file)
-        for file in os.listdir(name[1]):
-            ann.append(name[0] + file)
+    with open(path, 'r') as f:
+        for line in f.readlines():
+            item = line.strip().split(',')
+            if len(item) == 1:
+                img.append(item[0])
+            else:
+                img.append(item[0])
+                ann.append(item[1])
+    return img, ann
 
-    train_input_names.sort(),train_output_names.sort(), val_input_names.sort(), val_output_names.sort(), test_input_names.sort(), test_output_names.sort()
-    return train_input_names,train_output_names, val_input_names, val_output_names, test_input_names, test_output_names
+# Get a list of the training, validation, and testing file paths
+def prepare_data(dataset_dir=cfg.data_dir):
+    train_img, train_ann = readData(dataset_dir + 'train.txt')
+    val_img, val_ann = readData(dataset_dir + 'val.txt')
+    test_img, test_ann = readData(dataset_dir + 'test.txt')
+
+    return train_img, train_ann, val_img, val_ann, test_img, test_ann
+
+def load_image(path):
+    image = cv2.cvtColor(cv2.imread(path,-1), cv2.COLOR_BGR2RGB)
+    return image
 
 def data_augmentation(input_image, output_image):
     # Data augmentation

@@ -3,105 +3,53 @@
 # @Time    : 2018/7/13 2:08
 # author   : QLMX
 from __future__ import print_function
+
 import os,time,cv2, sys, math
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 import numpy as np
 import time, datetime
-import argparse
 import os, sys
-import subprocess
-
+import random
+from PIL import Image
 
 import helpers
 import utils
 from config import cfg
+from tools import buildNetwork
 
-import matplotlib.pyplot as plt
-
-sys.path.append("models")
 sys.path.append("preprocess")
-from FC_DenseNet_Tiramisu import build_fc_densenet
-from Encoder_Decoder import build_encoder_decoder
-from RefineNet import build_refinenet
-from FRRN import build_frrn
-from MobileUNet import build_mobile_unet
-from PSPNet import build_pspnet
-from GCN import build_gcn
-from DeepLabV3 import build_deeplabv3
-from DeepLabV3_plus import build_deeplabv3_plus
-from AdapNet import build_adaptnet
 import dataset
 
-
-def  select_model(model, num_class):
-    # Get the selected model.
-    # Some of them require pre-trained ResNet
-    if "Res50" in model and not os.path.isfile("models/resnet_v2_50.ckpt"):
-        utils.download_checkpoints("Res50")
-    if "Res101" in model and not os.path.isfile("models/resnet_v2_101.ckpt"):
-        utils.download_checkpoints("Res101")
-    if "Res152" in model and not os.path.isfile("models/resnet_v2_152.ckpt"):
-        utils.download_checkpoints("Res152")
-
-    network = None
-    init_fn = None
-    if model == "FC-DenseNet56" or model == "FC-DenseNet67" or model == "FC-DenseNet103":
-        network = build_fc_densenet(net_input, preset_model=model, num_classes=num_class)
-    elif model == "RefineNet-Res50" or model == "RefineNet-Res101" or model == "RefineNet-Res152":
-        # RefineNet requires pre-trained ResNet weights
-        network, init_fn = build_refinenet(net_input, preset_model=model, num_classes=num_class)
-    elif model == "FRRN-A" or model == "FRRN-B":
-        network = build_frrn(net_input, preset_model=model, num_classes=num_class)
-    elif model == "Encoder-Decoder" or model == "Encoder-Decoder-Skip":
-        network = build_encoder_decoder(net_input, preset_model=model, num_classes=num_class)
-    elif model == "MobileUNet" or model == "MobileUNet-Skip":
-        network = build_mobile_unet(net_input, preset_model=model, num_classes=num_class)
-    elif model == "PSPNet-Res50" or model == "PSPNet-Res101" or model == "PSPNet-Res152":
-        # Image size is required for PSPNet
-        # PSPNet requires pre-trained ResNet weights
-        network, init_fn = build_pspnet(net_input, label_size=[args.crop_height, args.crop_width],
-                                        preset_model=model, num_classes=num_class)
-    elif model == "GCN-Res50" or model == "GCN-Res101" or model == "GCN-Res152":
-        # GCN requires pre-trained ResNet weights
-        network, init_fn = build_gcn(net_input, preset_model=model, num_classes=num_class)
-    elif model == "DeepLabV3-Res50" or model == "DeepLabV3-Res101" or model == "DeepLabV3-Res152":
-        # DeepLabV requires pre-trained ResNet weights
-        network, init_fn = build_deeplabv3(net_input, preset_model=model, num_classes=num_class)
-    elif model == "DeepLabV3_plus-Res50" or model == "DeepLabV3_plus-Res101" or model == "DeepLabV3_plus-Res152":
-        # DeepLabV3+ requires pre-trained ResNet weights
-        network, init_fn = build_deeplabv3_plus(net_input, preset_model=model, num_classes=num_class)
-    elif model == "AdapNet":
-        network = build_adaptnet(net_input, num_classes=num_class)
-    elif model == "custom":
-        network = build_custom(net_input, num_class)
-    else:
-        raise ValueError(
-            "Error: the model %d is not available. Try checking which models are available using the command python main.py --help")
-    return network, init_fn
-
 def train():
-    print("\n***** Begin training *****")
-    print("Dataset -->", args.dataset)
-    print("Model -->", args.model)
-    print("Crop Height -->", args.crop_height)
-    print("Crop Width -->", args.crop_width)
-    print("Num Epochs -->", args.num_epochs)
-    print("Batch Size -->", args.batch_size)
-    print("Num Classes -->", num_classes)
+    if cfg.class_balancing:
+        print("Computing class weights for trainlabel ...")
+        class_weights = utils.compute_class_weights(labels_dir=train_output_names, label_values=label_values)
+        weights = tf.reduce_sum(class_weights * net_output, axis=-1)
+        unweighted_loss = None
+        unweighted_loss = tf.nn.softmax_cross_entropy_with_logits(logits=network, labels=net_output)
+        losses = unweighted_loss * class_weights
+    else:
+        losses = tf.nn.softmax_cross_entropy_with_logits(logits=network, labels=net_output)
+    loss = tf.reduce_mean(losses)
 
-    print("Data Augmentation:")
-    print("\tVertical Flip -->", args.v_flip)
-    print("\tHorizontal Flip -->", args.h_flip)
-    print("\tBrightness Alteration -->", args.brightness)
-    print("\tRotation -->", args.rotation)
-    print("")
+    opt = tf.train.AdamOptimizer(cfg.lr).minimize(loss, var_list=[var for var in tf.trainable_variables()])
 
+
+    sess.run(tf.global_variables_initializer())
+    utils.count_params()
+
+    # If a pre-trained ResNet is required, load the weights.
+    # This must be done AFTER the variables are initialized with sess.run(tf.global_variables_initializer())
+    if init_fn is not None:
+        init_fn(sess)
+
+    avg_scores_per_epoch = []
     avg_loss_per_epoch = []
 
     # Which validation images do we want
     val_indices = []
-    num_vals = min(args.num_val_images, len(val_input_names))
+    num_vals = min(cfg.num_val_images, len(val_input_names))
 
     # Set random seed to make sure models are validated on the same validation images.
     # So you can compare the results of different models more intuitively.
@@ -109,33 +57,31 @@ def train():
     val_indices = random.sample(range(0, len(val_input_names)), num_vals)
 
     # Do the training here
-    for epoch in range(0, args.num_epochs):
-
+    for epoch in range(0, cfg.num_epochs):
         current_losses = []
-
         cnt = 0
 
         # Equivalent to shuffling
         id_list = np.random.permutation(len(train_input_names))
 
-        num_iters = int(np.floor(len(id_list) / args.batch_size))
+        num_iters = int(np.floor(len(id_list) / cfg.batch_size))
         st = time.time()
         epoch_st = time.time()
+
         for i in range(num_iters):
             # st=time.time()
-
             input_image_batch = []
             output_image_batch = []
 
             # Collect a batch of images
-            for j in range(args.batch_size):
-                index = i * args.batch_size + j
+            for j in range(cfg.batch_size):
+                index = i * cfg.batch_size + j
                 id = id_list[index]
-                input_image = load_image(train_input_names[id])
-                output_image = load_image(train_output_names[id])
+                input_image = dataset.load_image(train_input_names[id])
+                output_image = dataset.load_image(train_output_names[id])
 
                 with tf.device('/cpu:0'):
-                    input_image, output_image = data_augmentation(input_image, output_image)
+                    input_image, output_image = dataset.data_augmentation(input_image, output_image)
 
                     # Prep the data. Make sure the labels are in one-hot format
                     input_image = np.float32(input_image) / 255.0
@@ -153,7 +99,7 @@ def train():
 
             # memory()
 
-            if args.batch_size == 1:
+            if cfg.batch_size == 1:
                 input_image_batch = input_image_batch[0]
                 output_image_batch = output_image_batch[0]
             else:
@@ -163,10 +109,9 @@ def train():
             # Do the training
             _, current = sess.run([opt, loss], feed_dict={net_input: input_image_batch, net_output: output_image_batch})
             current_losses.append(current)
-            cnt = cnt + args.batch_size
+            cnt = cnt + cfg.batch_size
             if cnt % 20 == 0:
-                string_print = "Epoch = %d Count = %d Current_Loss = %.4f Time = %.2f" % (
-                epoch, cnt, current, time.time() - st)
+                string_print = "Epoch = %d Count = %d Current_Loss = %.4f Time = %.2f" % (epoch, cnt, current, time.time() - st)
                 utils.LOG(string_print)
                 st = time.time()
 
@@ -174,20 +119,20 @@ def train():
         avg_loss_per_epoch.append(mean_loss)
 
         # Create directories if needed
-        if not os.path.isdir("%s/%04d" % ("checkpoints", epoch)):
-            os.makedirs("%s/%04d" % ("checkpoints", epoch))
+        if not os.path.isdir(cfg.base_dir + "%s/%s/%04d" % ("checkpoints", cfg.model, epoch)):
+            os.makedirs(cfg.base_dir + "%s/%s/%04d" % ("checkpoints", cfg.model, epoch))
 
         # Save latest checkpoint to same file name
         print("Saving latest checkpoint")
         saver.save(sess, model_checkpoint_name)
 
-        if val_indices != 0 and epoch % args.checkpoint_step == 0:
+        if val_indices != 0 and epoch % cfg.checkpoint_step == 0:
             print("Saving checkpoint for this epoch")
-            saver.save(sess, "%s/%04d/model.ckpt" % ("checkpoints", epoch))
+            saver.save(sess, cfg.base_dir + "%s/%s/%04d/model.ckpt" % ("checkpoints", cfg.model, epoch))
 
-        if epoch % args.validation_step == 0:
+        if epoch % cfg.validation_step == 0:
             print("Performing validation")
-            target = open("%s/%04d/val_scores.csv" % ("checkpoints", epoch), 'w')
+            target = open(cfg.base_dir + "%s/%s/%04d/val_scores.csv" % ("checkpoints", cfg.model, epoch), 'w')
             target.write("val_name, avg_accuracy, precision, recall, f1 score, mean iou, %s\n" % (class_names_string))
 
             scores_list = []
@@ -200,9 +145,8 @@ def train():
             # Do the validation on a small set of validation images
             for ind in val_indices:
 
-                input_image = np.expand_dims(
-                    np.float32(load_image(val_input_names[ind])[:args.crop_height, :args.crop_width]), axis=0) / 255.0
-                gt = load_image(val_output_names[ind])[:args.crop_height, :args.crop_width]
+                input_image = np.expand_dims(np.float32(dataset.load_image(val_input_names[ind])[:cfg.height, :cfg.width]), axis=0) / 255.0
+                gt = dataset.load_image(val_output_names[ind])[:cfg.height, :cfg.width]
                 gt = helpers.reverse_one_hot(helpers.one_hot_it(gt, label_values))
 
                 # st = time.time()
@@ -234,9 +178,9 @@ def train():
 
                 file_name = os.path.basename(val_input_names[ind])
                 file_name = os.path.splitext(file_name)[0]
-                cv2.imwrite("%s/%04d/%s_pred.png" % ("checkpoints", epoch, file_name),
+                cv2.imwrite(cfg.base_dir + "%s/%s/%04d/%s_pred.png" % ("checkpoints", cfg.base_dir, epoch, file_name),
                             cv2.cvtColor(np.uint8(out_vis_image), cv2.COLOR_RGB2BGR))
-                cv2.imwrite("%s/%04d/%s_gt.png" % ("checkpoints", epoch, file_name),
+                cv2.imwrite(cfg.base_dir + "%s/%s/%04d/%s_gt.png" % ("checkpoints", cfg.base_dir, epoch, file_name),
                             cv2.cvtColor(np.uint8(gt), cv2.COLOR_RGB2BGR))
 
             target.close()
@@ -259,7 +203,7 @@ def train():
             print("Validation IoU score = ", avg_iou)
 
         epoch_time = time.time() - epoch_st
-        remain_time = epoch_time * (args.num_epochs - 1 - epoch)
+        remain_time = epoch_time * (cfg.num_epochs - 1 - epoch)
         m, s = divmod(remain_time, 60)
         h, m = divmod(m, 60)
         if s != 0:
@@ -269,41 +213,17 @@ def train():
         utils.LOG(train_time)
         scores_list = []
 
-    fig = plt.figure(figsize=(11, 8))
-    ax1 = fig.add_subplot(111)
-
-    ax1.plot(range(args.num_epochs), avg_scores_per_epoch)
-    ax1.set_title("Average validation accuracy vs epochs")
-    ax1.set_xlabel("Epoch")
-    ax1.set_ylabel("Avg. val. accuracy")
-
-    plt.savefig('accuracy_vs_epochs.png')
-
-    plt.clf()
-
-    ax1 = fig.add_subplot(111)
-
-    ax1.plot(range(args.num_epochs), avg_loss_per_epoch)
-    ax1.set_title("Average loss vs epochs")
-    ax1.set_xlabel("Epoch")
-    ax1.set_ylabel("Current loss")
-
-    plt.savefig('loss_vs_epochs.png')
+    utils.drawLine(range(cfg.num_epochs), avg_scores_per_epoch, cfg.base_dir + 'checkpoints/' + cfg.model + '/accuracy_vs_epochs.png',
+                   title='Average validation accuracy vs epochs', xlabel='Epoch', ylabel='Avg. val. accuracy')
+    utils.drawLine(range(cfg.num_epochs), avg_loss_per_epoch, cfg.base_dir + 'checkpoints/' + cfg.model + '/loss_vs_epochs.png',
+                   title='Average loss vs epochs', xlabel='Epoch', ylabel='Current loss')
 
 def val():
-    print("\n***** Begin testing *****")
-    print("Dataset -->", args.dataset)
-    print("Model -->", args.model)
-    print("Crop Height -->", args.crop_height)
-    print("Crop Width -->", args.crop_width)
-    print("Num Classes -->", num_classes)
-    print("")
-
     # Create directories if needed
-    if not os.path.isdir("%s" % ("Val")):
-        os.makedirs("%s" % ("Val"))
+    if not os.path.isdir(cfg.base_dir + "%s/%s" % ("result", "Val")):
+        os.makedirs(cfg.base_dir + "%s/%s" % ("result", "Val"))
 
-    target = open("%s/val_scores.csv" % ("Val"), 'w')
+    target = open(cfg.base_dir + "%s/%s/val_scores.csv" % ("result", "Val"), 'w')
     target.write("val_name, avg_accuracy, precision, recall, f1 score, mean iou, %s\n" % (class_names_string))
     scores_list = []
     class_scores_list = []
@@ -318,9 +238,8 @@ def val():
         sys.stdout.write("\rRunning test image %d / %d" % (ind + 1, len(val_input_names)))
         sys.stdout.flush()
 
-        input_image = np.expand_dims(np.float32(load_image(val_input_names[ind])[:args.crop_height, :args.crop_width]),
-                                     axis=0) / 255.0
-        gt = load_image(val_output_names[ind])[:args.crop_height, :args.crop_width]
+        input_image = np.expand_dims(np.float32(dataset.load_image(val_input_names[ind])[:cfg.height, :cfg.width]), axis=0) / 255.0
+        gt = dataset.load_image(val_output_names[ind])[:cfg.height, :cfg.width]
         gt = helpers.reverse_one_hot(helpers.one_hot_it(gt, label_values))
 
         st = time.time()
@@ -350,8 +269,8 @@ def val():
 
         gt = helpers.colour_code_segmentation(gt, label_values)
 
-        cv2.imwrite("%s/%s_pred.png" % ("Val", file_name), cv2.cvtColor(np.uint8(out_vis_image), cv2.COLOR_RGB2BGR))
-        cv2.imwrite("%s/%s_gt.png" % ("Val", file_name), cv2.cvtColor(np.uint8(gt), cv2.COLOR_RGB2BGR))
+        cv2.imwrite(cfg.base_dir + "%s/%s/%s_pred.png" % ("result", "Val", file_name), cv2.cvtColor(np.uint8(out_vis_image), cv2.COLOR_RGB2BGR))
+        cv2.imwrite(cfg.base_dir + "%s/%s/%s_gt.png" % ("result", "Val", file_name), cv2.cvtColor(np.uint8(gt), cv2.COLOR_RGB2BGR))
 
     target.close()
 
@@ -373,51 +292,46 @@ def val():
     print("Average run time = ", avg_time)
 
 def predict():
-    if args.image is None:
-        ValueError("You must pass an image path when using prediction mode.")
 
-    print("\n***** Begin prediction *****")
-    print("Dataset -->", args.dataset)
-    print("Model -->", args.model)
-    print("Crop Height -->", args.crop_height)
-    print("Crop Width -->", args.crop_width)
-    print("Num Classes -->", num_classes)
-    print("Image -->", args.image)
-    print("")
+    # Equivalent to shuffling
+    for test in test_input_names:
 
-    sys.stdout.write("Testing image " + args.image)
-    sys.stdout.flush()
+        # to get the right aspect ratio of the output
+        loaded_image = dataset.load_image(test)
+        height, width, channels = loaded_image.shape
+        resize_height = int(height / (width / cfg.width))
 
-    # to get the right aspect ratio of the output
-    loaded_image = load_image(args.image)
-    height, width, channels = loaded_image.shape
-    resize_height = int(height / (width / args.crop_width))
+        resized_image = cv2.resize(loaded_image, (cfg.width, resize_height))
+        input_image = np.expand_dims(np.float32(resized_image[:cfg.height, :cfg.width]), axis=0) / 255.0
 
-    resized_image = cv2.resize(loaded_image, (args.crop_width, resize_height))
-    input_image = np.expand_dims(np.float32(resized_image[:args.crop_height, :args.crop_width]), axis=0) / 255.0
+        st = time.time()
+        output_image = sess.run(network, feed_dict={net_input: input_image})
 
-    st = time.time()
-    output_image = sess.run(network, feed_dict={net_input: input_image})
+        run_time = time.time() - st
 
-    run_time = time.time() - st
+        output_image = np.array(output_image[0, :, :, :])
+        output_image = helpers.reverse_one_hot(output_image)
 
-    output_image = np.array(output_image[0, :, :, :])
-    output_image = helpers.reverse_one_hot(output_image)
+        # this needs to get generalized
+        # class_names_list, label_values = helpers.get_label_info(os.path.join(cfg.data_dir, "class_dict.csv"))
 
-    # this needs to get generalized
-    class_names_list, label_values = helpers.get_label_info(os.path.join("CamVid", "class_dict.csv"))
+        out_vis_image = helpers.colour_code_segmentation(output_image, label_values)
+        out_vis_image = cv2.resize(out_vis_image, (height, width))
+        out_vis_image[out_vis_image >= cfg.threshold*255] = 255
+        out_vis_image[out_vis_image < cfg.threshold*255] = 0
 
-    out_vis_image = helpers.colour_code_segmentation(output_image, label_values)
-    file_name = utils.filepath_to_name(args.image)
-    cv2.imwrite("%s/%s_pred.png" % ("Test", file_name), cv2.cvtColor(np.uint8(out_vis_image), cv2.COLOR_RGB2BGR))
+        save_img = cv2.cvtColor(np.uint8(loaded_image), cv2.COLOR_RGB2BGR)
+        transparent_image = np.append(np.array(save_img)[:, :, 0:3], out_vis_image[:, :, None], axis=-1)
+        transparent_image = Image.fromarray(transparent_image)
 
-    print("")
+        file_name = utils.filepath_to_name(test)
+        cv2.imwrite(cfg.base_dir + "%s/%s/%s_pred.png" % ("result", "Test", file_name), transparent_image)
     print("Finished!")
-    print("Wrote image " + "%s/%s_pred.png" % ("Test", file_name))
 
 if __name__ == '__mian__':
-    #load data
-    class_names_list, label_values = helpers.get_label_info(os.path.join(cfg.class_dict, 'class_dict.csv'))
+    # Load the data
+    print("Loading the data ...")
+    class_names_list, label_values = helpers.get_label_info(os.path.join(cfg.data_dir, 'class_dict.csv'))
     class_names_string = ""
     for class_name in class_names_list:
         if not class_name == class_names_list[-1]:
@@ -437,47 +351,14 @@ if __name__ == '__mian__':
     net_input = tf.placeholder(tf.float32, shape=[None, None, None, 3])
     net_output = tf.placeholder(tf.float32, shape=[None, None, None, num_classes])
 
-    network, init_fn = select_model(cfg.model)
+    network, init_fn = buildNetwork(cfg.model, net_input, num_classes)
 
-
-    losses = None
-    if cfg.class_balancing:
-        print("Computing class weights for", args.dataset, "...")
-        class_weights = utils.compute_class_weights(labels_dir=args.dataset + "/train_labels",
-                                                    label_values=label_values)
-        weights = tf.reduce_sum(class_weights * net_output, axis=-1)
-        unweighted_loss = None
-        unweighted_loss = tf.nn.softmax_cross_entropy_with_logits(logits=network, labels=net_output)
-        losses = unweighted_loss * class_weights
-    else:
-        losses = tf.nn.softmax_cross_entropy_with_logits(logits=network, labels=net_output)
-    loss = tf.reduce_mean(losses)
-
-    opt = tf.train.AdamOptimizer(cfg.lr).minimize(loss, var_list=[var for var in tf.trainable_variables()])
-
-    saver = tf.train.Saver(max_to_keep=1000)
-    sess.run(tf.global_variables_initializer())
-
-    utils.count_params()
-
-    # If a pre-trained ResNet is required, load the weights.
-    # This must be done AFTER the variables are initialized with sess.run(tf.global_variables_initializer())
-    if init_fn is not None:
-        init_fn(sess)
+    saver = tf.train.Saver(max_to_keep=cfg.num_keep)
 
     # Load a previous checkpoint if desired
-    model_checkpoint_name = "checkpoints/latest_model_" + args.model + "_" + args.dataset + ".ckpt"
-    if args.continue_training or not args.mode == "train":
+    model_checkpoint_name = cfg.base_dir + "checkpoints/" + cfg.model + "/" + "model.ckpt"
+    if cfg.continue_training or not cfg.mode == 'train':
         print('Loaded latest model checkpoint')
         saver.restore(sess, model_checkpoint_name)
 
-    avg_scores_per_epoch = []
-
-    # Load the data
-    print("Loading the data ...")
     train()
-
-
-
-
-l
