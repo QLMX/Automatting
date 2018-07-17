@@ -27,10 +27,10 @@ def train():
         class_weights = utils.compute_class_weights(labels_dir=train_output_names, label_values=label_values)
         weights = tf.reduce_sum(class_weights * net_output, axis=-1)
         unweighted_loss = None
-        unweighted_loss = tf.nn.softmax_cross_entropy_with_logits(logits=network, labels=net_output)
+        unweighted_loss = tf.nn.softmax_cross_entropy_with_logits_v2(logits=network, labels=net_output)
         losses = unweighted_loss * class_weights
     else:
-        losses = tf.nn.softmax_cross_entropy_with_logits(logits=network, labels=net_output)
+        losses = tf.nn.softmax_cross_entropy_with_logits_v2(logits=network, labels=net_output)
     loss = tf.reduce_mean(losses)
 
     opt = tf.train.AdamOptimizer(cfg.lr).minimize(loss, var_list=[var for var in tf.trainable_variables()])
@@ -80,8 +80,11 @@ def train():
                 input_image = dataset.load_image(train_input_names[id])
                 output_image = dataset.load_image(train_output_names[id])
 
+                h, w, _ = input_image.shape
+                new_h, new_w = dataset.getTrainSize(h, w)
+
                 with tf.device('/cpu:0'):
-                    input_image, output_image = dataset.data_augmentation(input_image, output_image)
+                    input_image, output_image = dataset.data_augmentation(input_image, output_image, new_h, new_w)
 
                     # Prep the data. Make sure the labels are in one-hot format
                     input_image = np.float32(input_image) / 255.0
@@ -98,7 +101,7 @@ def train():
             # ***** THIS CAUSES A MEMORY LEAK AS NEW TENSORS KEEP GETTING CREATED *****
 
             # memory()
-
+            # print(cfg.batch_size)
             if cfg.batch_size == 1:
                 input_image_batch = input_image_batch[0]
                 output_image_batch = output_image_batch[0]
@@ -106,6 +109,7 @@ def train():
                 input_image_batch = np.squeeze(np.stack(input_image_batch, axis=1))
                 output_image_batch = np.squeeze(np.stack(output_image_batch, axis=1))
 
+            # print(input_image_batch.shape)
             # Do the training
             _, current = sess.run([opt, loss], feed_dict={net_input: input_image_batch, net_output: output_image_batch})
             current_losses.append(current)
@@ -144,10 +148,17 @@ def train():
 
             # Do the validation on a small set of validation images
             for ind in val_indices:
+                input_image = dataset.load_image(val_input_names[ind])
+                output_image = dataset.load_image(val_output_names[ind])
 
-                input_image = np.expand_dims(np.float32(dataset.load_image(val_input_names[ind])[:cfg.height, :cfg.width]), axis=0) / 255.0
-                gt = dataset.load_image(val_output_names[ind])[:cfg.height, :cfg.width]
-                gt = helpers.reverse_one_hot(helpers.one_hot_it(gt, label_values))
+                h, w, _ = input_image.shape
+                new_h, new_w = dataset.getTrainSize(h, w)
+
+                input_image, output_image = utils.random_crop(input_image, output_image, new_h, new_w)
+
+                input_image = np.expand_dims(np.float32(input_image), axis=0) / 255.0
+
+                gt = helpers.reverse_one_hot(helpers.one_hot_it(output_image, label_values))
 
                 # st = time.time()
 
@@ -178,9 +189,9 @@ def train():
 
                 file_name = os.path.basename(val_input_names[ind])
                 file_name = os.path.splitext(file_name)[0]
-                cv2.imwrite(cfg.base_dir + "%s/%s/%04d/%s_pred.png" % ("checkpoints", cfg.base_dir, epoch, file_name),
+                cv2.imwrite(cfg.base_dir + "%s/%s/%04d/%s_pred.png" % ("checkpoints", cfg.model, epoch, file_name),
                             cv2.cvtColor(np.uint8(out_vis_image), cv2.COLOR_RGB2BGR))
-                cv2.imwrite(cfg.base_dir + "%s/%s/%04d/%s_gt.png" % ("checkpoints", cfg.base_dir, epoch, file_name),
+                cv2.imwrite(cfg.base_dir + "%s/%s/%04d/%s_gt.png" % ("checkpoints", cfg.model, epoch, file_name),
                             cv2.cvtColor(np.uint8(gt), cv2.COLOR_RGB2BGR))
 
             target.close()
@@ -305,6 +316,7 @@ def predict():
         input_image = np.expand_dims(np.float32(resized_image[:cfg.height, :cfg.width]), axis=0) / 255.0
 
         st = time.time()
+        print(input_image.shape)
         output_image = sess.run(network, feed_dict={net_input: input_image})
 
         run_time = time.time() - st
@@ -316,19 +328,21 @@ def predict():
         # class_names_list, label_values = helpers.get_label_info(os.path.join(cfg.data_dir, "class_dict.csv"))
 
         out_vis_image = helpers.colour_code_segmentation(output_image, label_values)
-        out_vis_image = cv2.resize(out_vis_image, (height, width))
-        out_vis_image[out_vis_image >= cfg.threshold*255] = 255
-        out_vis_image[out_vis_image < cfg.threshold*255] = 0
-
-        save_img = cv2.cvtColor(np.uint8(loaded_image), cv2.COLOR_RGB2BGR)
-        transparent_image = np.append(np.array(save_img)[:, :, 0:3], out_vis_image[:, :, None], axis=-1)
-        transparent_image = Image.fromarray(transparent_image)
+        # print(out_vis_image.shape)
+        # out_vis_image = cv2.resize(out_vis_image, (height, width))
+        # out_vis_image[out_vis_image >= cfg.threshold*255] = 255
+        # out_vis_image[out_vis_image < cfg.threshold*255] = 0
+        #
+        # save_img = cv2.cvtColor(np.uint8(loaded_image), cv2.COLOR_RGB2BGR)
+        # transparent_image = np.append(np.array(save_img)[:, :, 0:3], out_vis_image[:, :, None], axis=-1)
+        # transparent_image = Image.fromarray(transparent_image)
 
         file_name = utils.filepath_to_name(test)
-        cv2.imwrite(cfg.base_dir + "%s/%s/%s_pred.png" % ("result", "Test", file_name), transparent_image)
+        cv2.imwrite(cfg.base_dir + "%s/%s/%s_pred.png" % ("result", "test", file_name), cv2.cvtColor(np.uint8(out_vis_image), cv2.COLOR_RGB2BGR))
+        # cv2.imwrite(cfg.base_dir + "%s/%s/%s_pred.png" % ("result", "Test", file_name), transparent_image)
     print("Finished!")
 
-if __name__ == '__mian__':
+if __name__ == '__main__':
     # Load the data
     print("Loading the data ...")
     class_names_list, label_values = helpers.get_label_info(os.path.join(cfg.data_dir, 'class_dict.csv'))
@@ -362,3 +376,4 @@ if __name__ == '__mian__':
         saver.restore(sess, model_checkpoint_name)
 
     train()
+    # predict()

@@ -37,16 +37,19 @@ class Config:
 
     #the train parameter
     num_epochs = 100
-    batch_size = 32
+    batch_size = 1
     num_val_images = 10
     lr = 0.0001
     num_keep = 1000
     num_val_images = 10
     checkpoint_step = 10
     validation_step = 1
+    continue_training = False
     mode = 'train'
+    # mode = 'test'
 
-    test_bath_size = 16
+
+    test_bath_size = 8
 
     model="FC-DenseNet103"
     class_balancing = False

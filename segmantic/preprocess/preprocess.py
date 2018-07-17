@@ -9,7 +9,7 @@ import random
 import numpy as np
 
 sys.path.append('../')
-form config import cfg
+from config import cfg
 
 
 def saveName(data_list, path):
@@ -18,7 +18,7 @@ def saveName(data_list, path):
             f.write(line + '\n')
 
 # Get a list of the training, validation, and testing file paths
-def mergeData(val_rate, train_dir_list=cfg.name_dict, test_dir=cfg.test_img_dir, save_dir=cfg.data_dir):
+def mergeData(val_rate, train_dir_list=cfg.name_list, test_dir=cfg.test_img_dir, save_dir=cfg.data_dir):
     data = []
     test = []
 
@@ -29,7 +29,7 @@ def mergeData(val_rate, train_dir_list=cfg.name_dict, test_dir=cfg.test_img_dir,
         for file in os.listdir(name[0]):
             sub_img.append(name[0] + file)
         for file in os.listdir(name[1]):
-            sub_ann.append(name[0] + file)
+            sub_ann.append(name[1] + file)
         sub_img.sort()
         sub_ann.sort()
         for i in range(len(sub_img)):
@@ -44,7 +44,8 @@ def mergeData(val_rate, train_dir_list=cfg.name_dict, test_dir=cfg.test_img_dir,
     random.shuffle(data)
     random.shuffle(test)
 
-    train = data[:val_num]
+
+    train = data[:-val_num]
     val = data[-val_num:]
 
     saveName(train, save_dir + 'train.txt')
