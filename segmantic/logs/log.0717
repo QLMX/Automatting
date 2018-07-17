@@ -3567,3 +3567,82 @@ Validation IoU score =  0.9052045318022316
 [2018-07-17 09:35:10] Epoch = 13 Count = 4600 Current_Loss = 0.0345 Time = 9.78
 [2018-07-17 09:35:19] Epoch = 13 Count = 4620 Current_Loss = 0.0228 Time = 9.71
 [2018-07-17 09:35:29] Epoch = 13 Count = 4640 Current_Loss = 0.2514 Time = 9.90
+[2018-07-17 09:35:38] Epoch = 13 Count = 4660 Current_Loss = 0.0280 Time = 9.18
+[2018-07-17 09:35:49] Epoch = 13 Count = 4680 Current_Loss = 0.0171 Time = 10.18
+[2018-07-17 09:35:58] Epoch = 13 Count = 4700 Current_Loss = 0.0389 Time = 9.88
+[2018-07-17 09:36:08] Epoch = 13 Count = 4720 Current_Loss = 0.0403 Time = 9.29
+[2018-07-17 09:36:17] Epoch = 13 Count = 4740 Current_Loss = 0.0487 Time = 9.07
+[2018-07-17 09:36:27] Epoch = 13 Count = 4760 Current_Loss = 0.1565 Time = 9.81
+[2018-07-17 09:36:37] Epoch = 13 Count = 4780 Current_Loss = 0.2176 Time = 9.95
+[2018-07-17 09:36:46] Epoch = 13 Count = 4800 Current_Loss = 0.0437 Time = 9.77
+[2018-07-17 09:36:56] Epoch = 13 Count = 4820 Current_Loss = 0.0582 Time = 9.47
+[2018-07-17 09:37:05] Epoch = 13 Count = 4840 Current_Loss = 0.0215 Time = 8.79
+Saving latest checkpoint
+Performing validation
+
+Average validation accuracy for epoch # 0013 = 0.963956
+Average per class validation accuracies for epoch # 0013:
+Void = 0.926705
+person = 0.990366
+Validation precision =  0.9663625018843123
+Validation recall =  0.9639555366593177
+Validation F1 score =  0.96328410341801
+Validation IoU score =  0.906047780898167
+[2018-07-17 09:37:13] Remaining training time = 54 hours 31 minutes 46 seconds
+
+[2018-07-17 09:37:23] Epoch = 14 Count = 20 Current_Loss = 0.0555 Time = 9.88
+[2018-07-17 09:37:32] Epoch = 14 Count = 40 Current_Loss = 0.1026 Time = 8.68
+[2018-07-17 09:37:42] Epoch = 14 Count = 60 Current_Loss = 0.9259 Time = 9.96
+[2018-07-17 09:37:50] Epoch = 14 Count = 80 Current_Loss = 0.1363 Time = 8.62
+[2018-07-17 09:38:00] Epoch = 14 Count = 100 Current_Loss = 0.1129 Time = 9.76
+[2018-07-17 09:38:11] Epoch = 14 Count = 120 Current_Loss = 0.4631 Time = 10.74
+[2018-07-17 09:38:20] Epoch = 14 Count = 140 Current_Loss = 0.0188 Time = 9.16
+[2018-07-17 09:38:29] Epoch = 14 Count = 160 Current_Loss = 0.0546 Time = 9.36
+[2018-07-17 09:38:38] Epoch = 14 Count = 180 Current_Loss = 0.0164 Time = 8.34
+[2018-07-17 09:38:47] Epoch = 14 Count = 200 Current_Loss = 0.0603 Time = 9.64
+[2018-07-17 09:38:57] Epoch = 14 Count = 220 Current_Loss = 0.2005 Time = 10.02
+[2018-07-17 09:39:07] Epoch = 14 Count = 240 Current_Loss = 0.5865 Time = 9.52
+[2018-07-17 09:39:18] Epoch = 14 Count = 260 Current_Loss = 0.0910 Time = 10.89
+[2018-07-17 09:39:27] Epoch = 14 Count = 280 Current_Loss = 0.0104 Time = 8.91
+[2018-07-17 09:39:36] Epoch = 14 Count = 300 Current_Loss = 0.0657 Time = 9.59
+[2018-07-17 09:39:46] Epoch = 14 Count = 320 Current_Loss = 0.0230 Time = 9.61
+[2018-07-17 09:39:56] Epoch = 14 Count = 340 Current_Loss = 0.0871 Time = 9.63
+[2018-07-17 09:40:05] Epoch = 14 Count = 360 Current_Loss = 0.0135 Time = 9.23
+[2018-07-17 09:40:14] Epoch = 14 Count = 380 Current_Loss = 0.0546 Time = 9.21
+[2018-07-17 09:40:23] Epoch = 14 Count = 400 Current_Loss = 0.0203 Time = 9.27
+[2018-07-17 09:40:32] Epoch = 14 Count = 420 Current_Loss = 0.0894 Time = 8.44
+[2018-07-17 09:40:40] Epoch = 14 Count = 440 Current_Loss = 0.0699 Time = 8.47
+[2018-07-17 09:40:50] Epoch = 14 Count = 460 Current_Loss = 0.0691 Time = 9.81
+[2018-07-17 09:41:00] Epoch = 14 Count = 480 Current_Loss = 0.0303 Time = 10.03
+[2018-07-17 09:41:10] Epoch = 14 Count = 500 Current_Loss = 0.3096 Time = 9.96
+[2018-07-17 09:41:20] Epoch = 14 Count = 520 Current_Loss = 0.0453 Time = 10.06
+[2018-07-17 09:41:30] Epoch = 14 Count = 540 Current_Loss = 0.0339 Time = 9.57
+[2018-07-17 09:41:39] Epoch = 14 Count = 560 Current_Loss = 0.0790 Time = 9.47
+[2018-07-17 09:41:47] Epoch = 14 Count = 580 Current_Loss = 0.0294 Time = 8.39
+[2018-07-17 09:41:57] Epoch = 14 Count = 600 Current_Loss = 0.0246 Time = 9.39
+[2018-07-17 09:42:06] Epoch = 14 Count = 620 Current_Loss = 0.0146 Time = 9.16
+[2018-07-17 09:42:15] Epoch = 14 Count = 640 Current_Loss = 0.0423 Time = 9.35
+[2018-07-17 09:42:25] Epoch = 14 Count = 660 Current_Loss = 0.0371 Time = 9.82
+[2018-07-17 09:42:35] Epoch = 14 Count = 680 Current_Loss = 0.0651 Time = 9.60
+[2018-07-17 09:42:45] Epoch = 14 Count = 700 Current_Loss = 0.0328 Time = 9.90
+[2018-07-17 09:42:54] Epoch = 14 Count = 720 Current_Loss = 0.0328 Time = 9.35
+[2018-07-17 09:43:04] Epoch = 14 Count = 740 Current_Loss = 0.0196 Time = 9.77
+[2018-07-17 09:43:13] Epoch = 14 Count = 760 Current_Loss = 0.0417 Time = 9.14
+[2018-07-17 09:43:23] Epoch = 14 Count = 780 Current_Loss = 0.0684 Time = 10.20
+[2018-07-17 09:43:34] Epoch = 14 Count = 800 Current_Loss = 0.0169 Time = 10.43
+[2018-07-17 09:43:43] Epoch = 14 Count = 820 Current_Loss = 0.0306 Time = 8.98
+[2018-07-17 09:43:53] Epoch = 14 Count = 840 Current_Loss = 0.1168 Time = 10.42
+[2018-07-17 09:44:04] Epoch = 14 Count = 860 Current_Loss = 0.0275 Time = 10.65
+[2018-07-17 09:44:13] Epoch = 14 Count = 880 Current_Loss = 0.0189 Time = 9.64
+[2018-07-17 09:44:22] Epoch = 14 Count = 900 Current_Loss = 0.0904 Time = 9.08
+[2018-07-17 09:44:32] Epoch = 14 Count = 920 Current_Loss = 0.0342 Time = 9.72
+[2018-07-17 09:44:42] Epoch = 14 Count = 940 Current_Loss = 0.0448 Time = 9.73
+[2018-07-17 09:44:50] Epoch = 14 Count = 960 Current_Loss = 0.0128 Time = 7.76
+[2018-07-17 09:44:59] Epoch = 14 Count = 980 Current_Loss = 0.0784 Time = 9.45
+[2018-07-17 09:45:08] Epoch = 14 Count = 1000 Current_Loss = 0.0117 Time = 9.35
+[2018-07-17 09:45:19] Epoch = 14 Count = 1020 Current_Loss = 0.1291 Time = 10.21
+[2018-07-17 09:45:29] Epoch = 14 Count = 1040 Current_Loss = 0.0142 Time = 10.10
+[2018-07-17 09:45:39] Epoch = 14 Count = 1060 Current_Loss = 0.0251 Time = 10.65
+[2018-07-17 09:45:49] Epoch = 14 Count = 1080 Current_Loss = 0.0203 Time = 10.21
+[2018-07-17 09:46:00] Epoch = 14 Count = 1100 Current_Loss = 0.0327 Time = 10.41
+[2018-07-17 09:46:09] Epoch = 14 Count = 1120 Current_Loss = 0.0421 Time = 9.07
