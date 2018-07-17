@@ -3510,3 +3510,7 @@ Validation IoU score =  0.9052045318022316
 [2018-07-17 09:26:14] Epoch = 13 Count = 3460 Current_Loss = 0.0799 Time = 9.90
 [2018-07-17 09:26:24] Epoch = 13 Count = 3480 Current_Loss = 0.0701 Time = 9.77
 [2018-07-17 09:26:34] Epoch = 13 Count = 3500 Current_Loss = 0.3293 Time = 9.86
+[2018-07-17 09:26:43] Epoch = 13 Count = 3520 Current_Loss = 0.0200 Time = 9.09
+[2018-07-17 09:26:52] Epoch = 13 Count = 3540 Current_Loss = 0.0357 Time = 8.97
+[2018-07-17 09:27:02] Epoch = 13 Count = 3560 Current_Loss = 0.0595 Time = 9.68
+[2018-07-17 09:27:12] Epoch = 13 Count = 3580 Current_Loss = 0.0407 Time = 9.85
